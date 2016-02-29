@@ -2168,5 +2168,76 @@ steal("can/view/bindings", "can/map", "can/test", "can/component", "can/view/mus
 		stop();
 	});
 	
+	test("double render with batched / unbatched events (#2223)", function(){
+		var template = can.stache("{{#page}}{{doLog}}<input {($value)}='notAHelper'/>{{/page}}");
+		
+		var appVM = new can.Map();
+
+		var logCalls = 0;
+		can.stache.registerHelper('doLog', function(){
+			logCalls++;
+		});
+		
+		template(appVM);
+		
+		
+		can.batch.start();
+		appVM.attr('page', true);
+		can.batch.stop();
+		
+		// logs 'child' a 2nd time
+		appVM.attr('notAHelper', 'bar');
+		
+		
+		equal(logCalls, 1, "input rendered the right number of times");
+	});
+	
+
+	test("Child bindings updated before parent (#2252)", function(){
+		var template = can.stache("{{#eq page 'view'}}<child-binder {page}='page'/>{{/eq}}");
+		can.Component.extend({
+			tag: 'child-binder',
+			template: can.stache('<span/>'),
+			viewModel: {
+				_set: function(prop, val){
+					if(prop === "page"){
+						equal(val,"view", "value should not be edit");
+					}
+					
+					return can.Map.prototype._set.apply(this, arguments);
+				}
+			}
+		});
+		
+		var vm = new can.Map({
+			page : 'view'
+		});
+		template(vm);
+		
+		can.batch.start();
+		vm.attr('page', 'edit');
+		can.batch.stop();
+	});
+
+	test("can-value memory leak (#2270)", function () {
+
+		var template = can.view.stache('<div><input can-value="foo"></div>');
+
+		var vm = new can.Map({foo: ''});
+
+		var frag = template(vm);
+
+		var ta = document.getElementById("qunit-fixture");
+		ta.appendChild(frag);
+		
+		can.remove(can.$(ta.firstChild));
+		stop();
+		setTimeout(function(){
+			// still 1 binding, should be 0
+			equal(vm._bindings,0, "no bindings");
+			start();
+		}, 10);
+
+	});
 
 });
